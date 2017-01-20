@@ -52,6 +52,13 @@ func (ic InvalidCostError) Error() string {
 	return fmt.Sprintf("crypto/bcrypt: cost %d is outside allowed range (%d,%d)", int(ic), int(MinCost), int(MaxCost))
 }
 
+// The error returned from GenerateFromPasswordAndSalt when the salt is too long
+type InvalidSaltError int
+
+func (is InvalidSaltError) Error() string {
+	return fmt.Sprintf("crypto/bcrypt: salt length %d is too long, maxSaltSize: %d", int(is), maxSaltSize)
+}
+
 const (
 	majorVersion       = '2'
 	minorVersion       = 'a'
@@ -86,7 +93,19 @@ type hashed struct {
 // DefaultCost, instead. Use CompareHashAndPassword, as defined in this package,
 // to compare the returned hashed password with its cleartext version.
 func GenerateFromPassword(password []byte, cost int) ([]byte, error) {
-	p, err := newFromPassword(password, cost)
+
+	unencodedSalt := make([]byte, maxSaltSize)
+	var _, err = io.ReadFull(rand.Reader, unencodedSalt)
+	if err != nil {
+		return nil, err
+	}
+
+	return GenerateFromPasswordAndSalt(password, cost, unencodedSalt)
+}
+
+func GenerateFromPasswordAndSalt(password []byte, cost int, salt []byte) ([]byte, error) {
+
+	p, err := newFromPassword(password, cost, salt)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +145,11 @@ func Cost(hashedPassword []byte) (int, error) {
 	return p.cost, nil
 }
 
-func newFromPassword(password []byte, cost int) (*hashed, error) {
+func newFromPassword(password []byte, cost int, salt []byte) (*hashed, error) {
+	if len(salt) > maxSaltSize {
+		return nil, InvalidSaltError(len(salt))
+	}
+
 	if cost < MinCost {
 		cost = DefaultCost
 	}
@@ -140,13 +163,7 @@ func newFromPassword(password []byte, cost int) (*hashed, error) {
 	}
 	p.cost = cost
 
-	unencodedSalt := make([]byte, maxSaltSize)
-	_, err = io.ReadFull(rand.Reader, unencodedSalt)
-	if err != nil {
-		return nil, err
-	}
-
-	p.salt = base64Encode(unencodedSalt)
+	p.salt = base64Encode(salt)
 	hash, err := bcrypt(password, p.cost, p.salt)
 	if err != nil {
 		return nil, err

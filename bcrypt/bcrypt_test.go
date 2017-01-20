@@ -148,21 +148,36 @@ func TestCost(t *testing.T) {
 	}
 }
 
+func TestSaltValidation(t *testing.T) {
+	pass := []byte("mypassword")
+	salt := []byte("__too_long_salt__")
+
+	_, err := newFromPassword(pass, 8, salt)
+
+	if err == nil {
+		t.Fatalf("newFromPassword: should return a salt error")
+	}
+	if err != InvalidSaltError(17) {
+		t.Errorf("newFromPassword: should return salt error, got %#v", err)
+	}
+}
+
 func TestCostValidationInHash(t *testing.T) {
 	if testing.Short() {
 		return
 	}
 
 	pass := []byte("mypassword")
+	salt := []byte("salt")
 
 	for c := 0; c < MinCost; c++ {
-		p, _ := newFromPassword(pass, c)
+		p, _ := newFromPassword(pass, c, salt)
 		if p.cost != DefaultCost {
 			t.Errorf("newFromPassword should default costs below %d to %d, but was %d", MinCost, DefaultCost, p.cost)
 		}
 	}
 
-	p, _ := newFromPassword(pass, 14)
+	p, _ := newFromPassword(pass, 14, salt)
 	if p.cost != 14 {
 		t.Errorf("newFromPassword should default cost to 14, but was %d", p.cost)
 	}
@@ -172,7 +187,7 @@ func TestCostValidationInHash(t *testing.T) {
 		t.Errorf("newFromHash should maintain the cost at %d, but was %d", p.cost, hp.cost)
 	}
 
-	_, err := newFromPassword(pass, 32)
+	_, err := newFromPassword(pass, 32, salt)
 	if err == nil {
 		t.Fatalf("newFromPassword: should return a cost error")
 	}
@@ -182,7 +197,7 @@ func TestCostValidationInHash(t *testing.T) {
 }
 
 func TestCostReturnsWithLeadingZeroes(t *testing.T) {
-	hp, _ := newFromPassword([]byte("abcdefgh"), 7)
+	hp, _ := newFromPassword([]byte("abcdefgh"), 7, []byte("salt"))
 	cost := hp.Hash()[4:7]
 	expected := []byte("07$")
 
