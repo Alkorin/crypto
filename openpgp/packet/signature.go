@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/keybase/go-crypto/ed25519"
 	"github.com/keybase/go-crypto/openpgp/errors"
 	"github.com/keybase/go-crypto/openpgp/s2k"
 	"github.com/keybase/go-crypto/rsa"
@@ -662,12 +663,9 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 		sig.ECDSASigR = FromBig(r)
 		sig.ECDSASigS = FromBig(s)
 	case PubKeyAlgoEdDSA:
-		r, s, err := priv.PrivateKey.(*EdDSAPrivateKey).Sign(digest)
-		if err != nil {
-			return err
-		}
-		sig.EdDSASigR = FromBytes(r)
-		sig.EdDSASigS = FromBytes(s)
+		rs := ed25519.Sign(priv.PrivateKey.(ed25519.PrivateKey), digest)
+		sig.EdDSASigR = FromBytes(rs[:32])
+		sig.EdDSASigS = FromBytes(rs[32:])
 	default:
 		err = errors.UnsupportedError("public key algorithm for signing: " + strconv.Itoa(int(priv.PubKeyAlgo)))
 	}

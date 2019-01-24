@@ -39,28 +39,6 @@ type PrivateKey struct {
 	s2kHeader     []byte
 }
 
-type EdDSAPrivateKey struct {
-	PrivateKey
-	seed parsedMPI
-}
-
-func (e *EdDSAPrivateKey) Sign(digest []byte) (R, S []byte, err error) {
-	r := bytes.NewReader(e.seed.bytes)
-	publicKey, privateKey, err := ed25519.GenerateKey(r)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if !bytes.Equal(publicKey, e.PublicKey.edk.p.bytes[1:]) { // [1:] because [0] is 0x40 mpi header
-		return nil, nil, errors.UnsupportedError("EdDSA: Private key does not match public key.")
-	}
-
-	sig := ed25519.Sign(privateKey, digest)
-
-	sigLen := ed25519.SignatureSize / 2
-	return sig[:sigLen], sig[sigLen:], nil
-}
-
 func NewRSAPrivateKey(currentTime time.Time, priv *rsa.PrivateKey) *PrivateKey {
 	pk := new(PrivateKey)
 	pk.PublicKey = *NewRSAPublicKey(currentTime, &priv.PublicKey)
@@ -316,7 +294,7 @@ func (pk *PrivateKey) serializePrivateKey(w io.Writer) (err error) {
 		err = serializeECDSAPrivateKey(w, priv)
 	case *ecdh.PrivateKey:
 		err = serializeECDHPrivateKey(w, priv)
-	case *EdDSAPrivateKey:
+	case ed25519.PrivateKey:
 		err = serializeEdDSAPrivateKey(w, priv)
 	default:
 		err = errors.InvalidArgumentError("unknown private key type")
@@ -357,8 +335,8 @@ func serializeECDHPrivateKey(w io.Writer, priv *ecdh.PrivateKey) error {
 	return writeBig(w, priv.X)
 }
 
-func serializeEdDSAPrivateKey(w io.Writer, priv *EdDSAPrivateKey) error {
-	return writeMPI(w, priv.seed.bitLength, priv.seed.bytes)
+func serializeEdDSAPrivateKey(w io.Writer, priv ed25519.PrivateKey) error {
+	return writeMPI(w, 8*uint16(len(priv.Seed())), priv.Seed())
 }
 
 // Decrypt decrypts an encrypted private key using a passphrase.
@@ -536,20 +514,17 @@ func (pk *PrivateKey) parseECDSAPrivateKey(data []byte) (err error) {
 }
 
 func (pk *PrivateKey) parseEdDSAPrivateKey(data []byte) (err error) {
-	eddsaPriv := new(EdDSAPrivateKey)
-	eddsaPriv.PublicKey = pk.PublicKey
-
 	buf := bytes.NewBuffer(data)
-	eddsaPriv.seed.bytes, eddsaPriv.seed.bitLength, err = readMPI(buf)
+	seed, _, err := readMPI(buf)
 	if err != nil {
 		return err
 	}
 
-	if bLen := len(eddsaPriv.seed.bytes); bLen != 32 { // 32 bytes private part of ed25519 key.
+	if bLen := len(seed); bLen != 32 { // 32 bytes private part of ed25519 key.
 		return errors.UnsupportedError(fmt.Sprintf("Unexpected EdDSA private key length: %d", bLen))
 	}
 
-	pk.PrivateKey = eddsaPriv
+	pk.PrivateKey = ed25519.NewKeyFromSeed(seed)
 	pk.Encrypted = false
 	pk.encryptedData = nil
 
