@@ -370,6 +370,23 @@ func NewECDSAPublicKey(creationTime time.Time, pub *ecdsa.PublicKey) *PublicKey 
 	return pk
 }
 
+func NewEdDSAPublicKey(creationTime time.Time, pub *ed25519.PublicKey) *PublicKey {
+	pk := &PublicKey{
+		CreationTime: creationTime,
+		PubKeyAlgo:   PubKeyAlgoEdDSA,
+		PublicKey:    pub,
+		edk:          new(edDSAkey),
+	}
+	pk.edk.oid = oidEdDSA
+	pk.edk.p.bytes = make([]byte, 33)
+	pk.edk.p.bytes[0] = 0x40
+	copy(pk.edk.p.bytes[1:], []byte(*pub))
+	pk.edk.p.bitLength = 33 * 8
+
+	pk.setFingerPrintAndKeyId()
+	return pk
+}
+
 func NewECDHPublicKey(creationTime time.Time, pub *ecdh.PublicKey) *PublicKey {
 	pk := &PublicKey{
 		CreationTime: creationTime,

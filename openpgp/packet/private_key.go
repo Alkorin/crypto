@@ -100,6 +100,22 @@ func NewECDHPrivateKey(currentTime time.Time, priv *ecdh.PrivateKey) *PrivateKey
 	return pk
 }
 
+func NewEdDSAPrivateKey(currentTime time.Time, priv *ed25519.PrivateKey) *PrivateKey {
+	pk := new(PrivateKey)
+	pub := priv.Public().(ed25519.PublicKey)
+	pk.PublicKey = *NewEdDSAPublicKey(currentTime, &pub)
+
+	eddsaPriv := new(EdDSAPrivateKey)
+	eddsaPriv.PublicKey = pk.PublicKey
+	eddsaPriv.seed.bytes = priv.Seed()
+
+	pk.PrivateKey = eddsaPriv
+	pk.Encrypted = false
+	pk.encryptedData = nil
+
+	return pk
+}
+
 func (pk *PrivateKey) parse(r io.Reader) (err error) {
 	err = (&pk.PublicKey).parse(r)
 	if err != nil {
