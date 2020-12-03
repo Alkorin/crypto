@@ -377,11 +377,11 @@ func NewEdDSAPublicKey(creationTime time.Time, pub *ed25519.PublicKey) *PublicKe
 		PublicKey:    pub,
 		edk:          new(edDSAkey),
 	}
-	pk.edk.oid = oidCurve25519
+	pk.edk.oid = oidEdDSA
 	pk.edk.p.bytes = make([]byte, 33)
 	pk.edk.p.bytes[0] = 0x40
 	copy(pk.edk.p.bytes[1:], []byte(*pub))
-	pk.edk.p.bitLength = 33
+	pk.edk.p.bitLength = 33 * 8
 
 	pk.setFingerPrintAndKeyId()
 	return pk
